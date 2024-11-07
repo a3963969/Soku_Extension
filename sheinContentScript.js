@@ -1,5 +1,27 @@
+
 // 添加更多的调试信息
 console.log('开始加载 SOKU 脚本...');
+
+async function analyzeProduct(description) {
+  try {
+      const response = await chrome.runtime.sendMessage({
+          action: 'analyzeProduct',
+          prompt: `分析这件商品: ${description}。请提供以下信息:
+              1. 风格特点
+              2. 适合场合
+              3. 搭配建议`
+      });
+      
+      if (response && response.success) {
+          return response.data;
+      } else {
+          throw new Error(response?.error || '分析失败');
+      }
+  } catch (error) {
+      console.error('商品分析请求失败:', error);
+      throw error;
+  }
+}
 
 // 在文件最开始添加token相关代码
 window._validTokens = {};
@@ -65,7 +87,7 @@ function addButtonToCard(card, imgElement) {
     cursor: pointer;
     font-size: 12px;
   `;
-  
+		
   // 创建1688和AMZ按钮的容器
   const extraButtonsContainer = document.createElement('div');
   extraButtonsContainer.style = `
@@ -103,7 +125,7 @@ function addButtonToCard(card, imgElement) {
     cursor: pointer;
     font-size: 12px;
   `;
-  
+		
   // 添加搜索相似按钮的点击事件
   searchButton.onclick = async (e) => {
     e.preventDefault();
@@ -131,6 +153,10 @@ function addButtonToCard(card, imgElement) {
         if (fullImageUrl && !fullImageUrl.includes('...')) {
           console.log('获取到完整URL:', fullImageUrl);
           chrome.runtime.sendMessage({action: 'getImageSearchResult', url: fullImageUrl});
+
+          const analysis = await analyzeProduct('描述');
+          console.log('分析结果:', analysis);
+
           searchButton.textContent = '搜索中...';
           searchButton.style.backgroundColor = 'rgba(255, 165, 0, 0.8)';
         } else {
@@ -186,11 +212,67 @@ function addButtonToCard(card, imgElement) {
       downloadButton.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
     }
   };
-  
+		
   card.style.position = 'relative';
   card.prepend(searchButton);
   card.appendChild(extraButtonsContainer);
   card.appendChild(downloadButton);
+}
+
+function addReviewSummaryAndButton(review_num_total, like_num_total,comment_image_array) {
+  const targetElement = document.querySelector('#goods-detail-v3 > div.goods-detailv2 > div.goods-detailv2__media > div > div.product-intro > div.product-intro__info > div.product-intro__info-sticky > div.product-intro__head.j-expose__product-intro__head');
+  
+  if (targetElement) {
+    // 创建评论信息容器
+    const reviewSummaryContainer = document.createElement('div');
+    reviewSummaryContainer.style = `
+      display: flex;
+      padding: 5px;
+      align-items: center; /* 水平居中 */
+      margin-bottom: 10px;
+      background-color: #fff7e2;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #333;
+      line-height: 1.6;
+    `;
+    
+    // 添加评论信息
+    reviewSummaryContainer.innerHTML = `
+      <p style="margin: 5px 5px;">带图总数: <span style="color: red;">${review_num_total}</span></p>
+      <p style="margin: 5px 5px;">点赞总数: <span style="color: red;">${like_num_total}</span></p>
+      <p style="margin: 5px 5px;">买家秀数: <span style="color: red;">${comment_image_array.length}</span></p>
+    `;
+    
+    // 创建“下载买家秀合集”按钮
+    const downloadButton = document.createElement('button');
+    downloadButton.textContent = '批量下载';
+    downloadButton.style = `
+      display: block;
+      margin-left: 10px;
+      padding: 3px 6px;
+      background-color: rgba(76, 175, 80, 0.8);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    `;
+    
+    // 添加按钮点击事件
+    downloadButton.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // 在这里添加下载买家秀合集的逻辑
+      console.log('下载买家秀合集按钮被点击');
+    };
+    
+    // 将评论信息和按钮添加到目标元素
+    reviewSummaryContainer.appendChild(downloadButton);
+    targetElement.prepend(reviewSummaryContainer);
+  } else {
+    console.error('未找到目标元素');
+  }
 }
 
 // 创建额外按辅助函数
@@ -573,30 +655,74 @@ function extractGbRawData() {
   return null;
 }
 
+// 获取商品颜色信息
+function extractColorData() {
+  const scripts = document.getElementsByTagName('script');
+  for (const script of scripts) {
+    const content = script.textContent || '';
+    if (content.includes('window.gbRawData')) {
+      try {
+        // 使用正则表达式只匹配我们需要的数据部分
+        const spuMatch = content.match(/"productRelationID":"([^"]+)"/);
+        const colorDataMatch = content.match(/"colorData":\s*({[\s\S]*?"showFindMyShadeEntry":\s*\w+\s*})/);
+        if (colorDataMatch && colorDataMatch[1]) {
+            try {
+              const colorData = JSON.parse(colorDataMatch[1]);
+              if (colorData.colorList && Array.isArray(colorData.colorList)) {
+                  const goodsInfo = colorData.colorList.map(item => ({
+                      goods_id: item.goods_id,
+                      goods_title: item.goods_title,
+                      color: item.sort?.attr_value,
+                      stock: item.goods_stock,
+                      isCurrentGoods: item.isCurrentGoods,
+                      goods_spu: spuMatch?.[1] || ''
+                  }));
+                  console.log('商品信息:', goodsInfo);
+              }
+          } catch (error) {
+              console.error('解析失败:', error);
+              // 调试用
+              console.log('匹配到的数据前100个字符:', colorDataMatch[1].substring(0, 100));
+          }
+        }
+        
+        
+      } catch (e) {
+        console.error('提取数据失败:', e);
+      }
+    }
+  }
+  return null;
+}
 
 // 处理评论数据
 function processReviewData(data) {
   try {
     const reviews = data.info?.comment_info || [];
-    console.log('开始处理评论数据，共', reviews.length, '条评论');
-    
+    const review_num_total = reviews.length;
+    let like_num_total = 0;
+    let comment_image_array = [];
     reviews.forEach(review => {
       const {
         user_name,
         content,
         comment_rank: rating,
         comment_time: created_at,
-        comment_image: images
+        comment_image: images,
+        like_num: like_num,
+        comment_image: comment_image
       } = review;
-      
-      console.log('评论详情:', {
-        用户: user_name,
-        内容: content,
-        评分: rating,
-        时间: created_at,
-        图片数: images?.length || 0
-      });
+      like_num_total += parseInt(like_num, 10); // 将 like_num 转换为数字
+      if(comment_image){
+        comment_image_array.push(...comment_image);
+      }
     });
+    console.log('评论点赞总数:', like_num_total);
+    console.log('评论总数:', review_num_total);
+    console.log('评论图片数:', comment_image_array.length);
+    console.log('评论图片合集:', comment_image_array);
+    addReviewSummaryAndButton(review_num_total, like_num_total,comment_image_array);
+
   } catch (error) {
     console.error('处理评论数据时出错:', error);
   }
@@ -615,7 +741,6 @@ function setupReviewListener() {
 async function getTokensFromBackground() {
   // 如果已经有有效的tokens,直接返回
   if (window._validTokens?.antiIn && window._validTokens?.armorToken) {
-    console.log('从getTokensFromBackground成功获取所有token:', window._validTokens);
     return window._validTokens;
   }
 
@@ -640,7 +765,6 @@ async function waitForTokens(timeout = 60000) {
     
     // 检查是否获取到必要的token
     if (window._validTokens?.antiIn && window._validTokens?.armorToken) {
-      console.log('成功获取所有token:', window._validTokens);
       return; // 这里会真正结束waitForTokens函数
     }
     
@@ -708,22 +832,22 @@ async function triggerReviewRequest(page = 1, allReviews = []) {
       // 设置动态token
       if (window._validTokens?.antiIn) {
         xhr.setRequestHeader('anti-in', window._validTokens.antiIn);
-        console.log('设置 anti-in:', window._validTokens.antiIn);
+        //console.log('设置 anti-in:', window._validTokens.antiIn);
       }
       
       if (window._validTokens?.armorToken) {
         xhr.setRequestHeader('armortoken', window._validTokens.armorToken);
-        console.log('设置 armortoken:', window._validTokens.armorToken);
+        //.log('设置 armortoken:', window._validTokens.armorToken);
       }
       
       if (window._validTokens?.smdeviceid) {
         xhr.setRequestHeader('smdeviceid', window._validTokens.smdeviceid);
-        console.log('设置 smdeviceid:', window._validTokens.smdeviceid);
+        //console.log('设置 smdeviceid:', window._validTokens.smdeviceid);
       }
       
       if (window._validTokens?.gwAuth) {
         xhr.setRequestHeader('x-gw-auth', window._validTokens.gwAuth);
-        console.log('设置 x-gw-auth:', window._validTokens.gwAuth);
+        //console.log('设置 x-gw-auth:', window._validTokens.gwAuth);
       }
       
       xhr.onload = function() {
@@ -823,19 +947,12 @@ function createRequestInterceptor() {
     // 保存关键请求头
     if (header.toLowerCase() === 'x-gw-auth') {
       window._validTokens.gwAuth = value;
-      console.log('SOKU捕获到gwAuth:', value);
+      //console.log('SOKU捕获到gwAuth:', value);
     }
     return originalXHRSetRequestHeader.apply(this, arguments);
   };
   
   XMLHttpRequest.prototype.open = function(method, url, ...args) {
-    if (typeof url === 'string' && url.includes('get_goods_review_detail')) {
-      console.log('SOKU拦截到评论请求:', {
-        method,
-        url,
-        tokens: window._validTokens
-      });
-    }
     return originalXHROpen.apply(this, arguments);
   };
 
@@ -923,6 +1040,8 @@ function createRequestInterceptor() {
       setupReviewListener();
       console.log('SOKU所有功能初始化完成');
       
+      // 获取商品颜色信息
+      extractColorData();
       // 等待一段时间后触发评论请求
       setTimeout(() => {
         console.log('开始自动触发评论请求');

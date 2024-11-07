@@ -23,7 +23,8 @@
     "https://aip.baidubce.com/*",
     "https://*.ltwebstatic.com/*",
     "https://www.amazon.com/*",
-    "*://*.shein.com/*"
+    "*://*.shein.com/*",
+    "https://api.anthropic.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -45,11 +46,13 @@
         "*://*.amazon.com/*"
       ],
       "run_at": "document_end",
-      "js": ["sheinContentScript.js"]
+      "js": ["sheinContentScript.js"],
+      "type": "module"
     },
     {
       "matches": ["https://www.amazon.com/*"],
-      "js": ["amazonContentScript.js"]
+      "js": ["amazonContentScript.js"],
+      "run_at": "document_end"
     }
   ],
   "action": {
