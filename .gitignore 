@@ -1,0 +1,3 @@
+# 添加配置文件到 .gitignore
+config.js
+.env
