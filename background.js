@@ -3,8 +3,8 @@ let tokenExpireTime = 0;
 
 // 获取 access token
 async function getAccessToken() {
-  const API_KEY = 'MQULJOPhW6KLbXuDm9ywEU7D';
-  const SECRET_KEY = 'PXVWTfj3fHK2cO23inEqFwaWQ32i9zFD';
+  const API_KEY = config.BAIDU_API_KEY;
+  const SECRET_KEY = config.BAIDU_SECRET_KEY;
 
   if (cachedToken && Date.now() < tokenExpireTime) {
 	console.log('Getting access token',cachedToken); // 调试信息

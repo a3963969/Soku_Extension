@@ -221,7 +221,7 @@ function addButtonToCard(card, imgElement) {
 
 function addReviewSummaryAndButton(review_num_total, like_num_total,comment_image_array) {
   const targetElement = document.querySelector('#goods-detail-v3 > div.goods-detailv2 > div.goods-detailv2__media > div > div.product-intro > div.product-intro__info > div.product-intro__info-sticky > div.product-intro__head.j-expose__product-intro__head');
-  
+  console.log('addReviewSummaryAndButton targetElement:', targetElement);
   if (targetElement) {
     // 创建评论信息容器
     const reviewSummaryContainer = document.createElement('div');
@@ -678,6 +678,7 @@ function extractColorData() {
                       goods_spu: spuMatch?.[1] || ''
                   }));
                   console.log('商品信息:', goodsInfo);
+                  return goodsInfo; // 添加这行来返回处理后的数据
               }
           } catch (error) {
               console.error('解析失败:', error);
@@ -697,11 +698,13 @@ function extractColorData() {
 
 // 处理评论数据
 function processReviewData(data) {
+  //console.log('processReviewData评论数据:',data);
   try {
-    const reviews = data.info?.comment_info || [];
+    const reviews = data || [];
     const review_num_total = reviews.length;
     let like_num_total = 0;
     let comment_image_array = [];
+    console.log('processReviewData评论数据:',reviews);
     reviews.forEach(review => {
       const {
         user_name,
@@ -721,21 +724,16 @@ function processReviewData(data) {
     console.log('评论总数:', review_num_total);
     console.log('评论图片数:', comment_image_array.length);
     console.log('评论图片合集:', comment_image_array);
+    
     addReviewSummaryAndButton(review_num_total, like_num_total,comment_image_array);
+      
 
   } catch (error) {
     console.error('处理评论数据时出错:', error);
   }
 }
 
-// 监听评论数据
-function setupReviewListener() {
-  console.log('设置评论监听器');
-  window.addEventListener('reviewDataReceived', (event) => {
-    console.log('收到评论数据:', event.detail.data);
-    processReviewData(event.detail.data);
-  });
-}
+
 
 // 修改token获取逻辑
 async function getTokensFromBackground() {
@@ -777,132 +775,122 @@ async function waitForTokens(timeout = 60000) {
 }
 
 
-// 获取评论数据
-async function triggerReviewRequest(page = 1, allReviews = []) {
-  console.log('准备触发第', page, '页评论请求');
-  
+// ... existing code ...
+
+// 通用的请求函数
+async function makeRequest(url, params = {}, options = {}) {
   try {
     await waitForTokens();
     
-    const productInfo = extractGbRawData();
-    if (!productInfo) {
-      throw new Error('无法获取商品信息');
-    }
-    
-    // 构建评论请求URL
-    const url = new URL('https://us.shein.com/bff-api/product/get_goods_review_detail');
-    const params = {
-      '_ver': '1.1.8',
-      '_lang': 'en',
-      'page': page.toString(),
-      'limit': '20',
-      'offset': ((page - 1) * 20).toString(),
-      'sort': '',
-      'is_picture': '1',
-      'comment_rank': '',
-      'rule_id': '',
-      'local_site_query_flag': '',
-      'local_site_abt_flag': '',
-      'goods_spu': productInfo.detail.goods_spu || '',
-      'sku': productInfo.detail.sku || '',
-      'store_code': productInfo.detail.store_code || '',
-      'tag_rule_id': 'type%3DA',
-      'store_comment_flag': '1',
-      'cat_id': productInfo.detail.cat_id || '',
-      'isLowestPriceProductOfBuyBox': '0',
-      'mainProductSameGroupId': ''
-    };
-    
+    const requestUrl = new URL(url);
     Object.entries(params).forEach(([key, value]) => {
-      url.searchParams.set(key, value);
+      if (value !== undefined && value !== null) {
+        requestUrl.searchParams.set(key, value);
+      }
     });
+    //console.log('请求数据:',requestUrl);
 
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open('GET', url.toString(), true);
+      xhr.open(options.method || 'GET', requestUrl.toString(), true);
+      
+      // 默认请求头
+      const defaultHeaders = {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'en',
+        'cache-control': 'no-cache',
+        'pragma': 'no-cache',
+        'webversion': '11.8.2',
+        'x-requested-with': 'XMLHttpRequest'
+      };
+
+      // 合并默认请求头和自定义请求头
+      const headers = { ...defaultHeaders, ...options.headers };
       
       // 设置请求头
-      xhr.setRequestHeader('accept', 'application/json, text/plain, */*');
-      xhr.setRequestHeader('accept-language', 'en');
-      xhr.setRequestHeader('cache-control', 'no-cache');
-      xhr.setRequestHeader('pragma', 'no-cache');
-      xhr.setRequestHeader('webversion', '11.8.2');
-      xhr.setRequestHeader('x-requested-with', 'XMLHttpRequest');
+      Object.entries(headers).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value);
+      });
       
-      // 设置动态token
-      if (window._validTokens?.antiIn) {
-        xhr.setRequestHeader('anti-in', window._validTokens.antiIn);
-        //console.log('设置 anti-in:', window._validTokens.antiIn);
-      }
-      
-      if (window._validTokens?.armorToken) {
-        xhr.setRequestHeader('armortoken', window._validTokens.armorToken);
-        //.log('设置 armortoken:', window._validTokens.armorToken);
-      }
-      
-      if (window._validTokens?.smdeviceid) {
-        xhr.setRequestHeader('smdeviceid', window._validTokens.smdeviceid);
-        //console.log('设置 smdeviceid:', window._validTokens.smdeviceid);
-      }
-      
-      if (window._validTokens?.gwAuth) {
-        xhr.setRequestHeader('x-gw-auth', window._validTokens.gwAuth);
-        //console.log('设置 x-gw-auth:', window._validTokens.gwAuth);
-      }
+      // 自动添加token请求头
+      const tokenHeaders = {
+        'anti-in': window._validTokens?.antiIn,
+        'armortoken': window._validTokens?.armorToken,
+        'smdeviceid': window._validTokens?.smdeviceid,
+        'x-gw-auth': window._validTokens?.gwAuth
+      };
+
+      Object.entries(tokenHeaders).forEach(([key, value]) => {
+        if (value) xhr.setRequestHeader(key, value);
+      });
       
       xhr.onload = function() {
         if (xhr.status === 200) {
           try {
             const data = JSON.parse(xhr.responseText);
-            console.log('获取第', page, '页评论数据');
-            
-            // 合并评论数据
-            const reviews = data.info?.comment_info || [];
-            allReviews.push(...reviews);
-            
-            // 检查是否还有下一页
-            const hasNextPage = data.info?.hasNextFlag === "1";
-            const totalNum = parseInt(data.info?.comment_num || 0);
-            
-            if (hasNextPage && allReviews.length < totalNum) {
-              // 递归获取下一页
-              setTimeout(() => {
-                triggerReviewRequest(page + 1, allReviews);
-              }, 1000);
-            } else {
-              // 所有评论获取完成，触发事件
-              console.log('所有评论获取完成，总共:', allReviews.length, '条评论');
-              window.dispatchEvent(new CustomEvent('reviewDataReceived', {
-                detail: { 
-                  data: {
-                    ...data,
-                    info: {
-                      ...data.info,
-                      comment_info: allReviews
-                    }
-                  }
-                }
-              }));
-            }
-            
             resolve(data);
           } catch (error) {
-            console.error('解析响应失败:', error);
-            reject(error);
+            reject(new Error('解析响应失败: ' + error.message));
           }
         } else {
-          console.error('请求失败:', xhr.status, xhr.statusText);
           reject(new Error(`HTTP ${xhr.status}: ${xhr.statusText}`));
         }
       };
       
-      xhr.onerror = function() {
-        console.error('请求出错');
-        reject(new Error('Network error'));
-      };
+      xhr.onerror = () => reject(new Error('Network error'));
       
-      xhr.send();
+      xhr.send(options.body);
     });
+    
+  } catch (error) {
+    console.error('请求失败:', error);
+    throw error;
+  }
+}
+
+// 重构后的评论请求函数
+async function triggerReviewRequest(page = 1, allReviews = [],url,params,colorname) {
+  console.log('颜色:',colorname,':准备触发第', page, '页评论请求');
+  
+  try {
+    params.page = page.toString();
+    params.offset = ((page - 1) * 20).toString();
+    params._ver = '1.1.8';
+    params._lang = 'en';
+    params.limit = '20';
+    params.sort = '';
+    params.comment_rank = '';
+    params.rule_id = '';
+    params.local_site_query_flag = '';
+    params.local_site_abt_flag = '';
+    params.store_comment_flag = '1';
+    params.isLowestPriceProductOfBuyBox = '0';
+    params.mainProductSameGroupId = '';
+
+    const data = await makeRequest(url, params);
+
+    // 处理评论数据
+    const reviews = data.info?.comment_info || [];
+    
+    //找所有颜色才需要翻页
+    if(colorname=='0'){
+      // 检查是否还有下一页
+      allReviews.push(...reviews);
+
+      const hasNextPage = data.info?.hasNextFlag === "1";
+      const totalNum = parseInt(data.info?.comment_num || 0);
+      
+      if (hasNextPage && allReviews.length < totalNum) {
+        // 递归获取下一页
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return triggerReviewRequest(page + 1, allReviews,url,params,colorname);
+      }
+      console.log('颜色:',colorname,':所有评论获取完成，总共:', allReviews.length, '条评论,评论内容:',allReviews);
+      return allReviews;
+    }else{
+      return data.info;
+    }
+    
     
   } catch (error) {
     console.error('评论请求失败:', error);
@@ -1013,13 +1001,16 @@ function createRequestInterceptor() {
   console.log('当前token状态:', window._validTokens);
 }
 // 初始化
+// 初始化
+// 初始化函数
 (async function initSOKU() {
-  console.log('=== 评论功能初始化===');
+  console.log('=== 评论功能初始化 ===');
 
   // 确保DOM加载完成后再执行数据获取
   if (document.readyState === 'loading') {
-      await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
+    await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve));
   }
+  
   // 立即初始化请求拦截
   try {
     createRequestInterceptor();
@@ -1037,20 +1028,246 @@ function createRequestInterceptor() {
   
   function setupFeatures() {
     try {
-      setupReviewListener();
       console.log('SOKU所有功能初始化完成');
-      
-      // 获取商品颜色信息
-      extractColorData();
       // 等待一段时间后触发评论请求
       setTimeout(() => {
         console.log('开始自动触发评论请求');
-        triggerReviewRequest();
+
+        const productInfo = extractGbRawData();
+        if (!productInfo) {
+          throw new Error('无法获取商品信息');
+        }
+        const params_all_reviews = {
+          'sku': productInfo.detail.sku || '',
+          'goods_spu': productInfo.detail.goods_spu || '',
+          'store_code': productInfo.detail.store_code || '',
+          'cat_id': productInfo.detail.cat_id || '',
+        };
+
+        //显示卖家评论
+         
+        const color_data = extractColorData();
+        console.log('获取到颜色数据:', color_data);
+        
+        if (color_data && color_data.length > 0) {
+          const processAllColors = async () => {
+            console.log('开始处理颜色数据...');
+            if (document.readyState !== 'complete') {
+              await new Promise(resolve => {
+                window.addEventListener('load', resolve);
+              });
+            }
+            // 获取所有颜色评论
+            const reviewData = await triggerReviewRequest(
+              1,  
+              [], 
+              'https://us.shein.com/bff-api/product/get_goods_review_detail',
+              params_all_reviews, 
+              '0' 
+            );
+            await processReviewData(reviewData);
+
+            const waitForColorContainer = () => {
+              return new Promise((resolve) => {
+                let attempts = 0;
+                const maxAttempts = 20;
+                
+                const check = () => {
+                  attempts++;
+                  console.log(`第 ${attempts} 次尝试查找颜色容器...`);
+                  
+                  const container = document.querySelector('.goods-color__radio-container');
+                  if (container) {
+                    console.log('成功找到颜色容器:', container);
+                    
+                    // 添加复制按钮
+                    const copyButton = document.createElement('span');
+                    copyButton.className = 'sui-popover__trigger';
+                    copyButton.innerHTML = `
+                      <div class="goods-color__radio goods-color__radio_radio" tabindex="0" aria-label="复制">
+                        <div class="radio-inner" style="display:flex;align-items:center;justify-content:center;">
+                          <svg viewBox="0 0 24 24" width="16" height="16">
+                            <path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                          </svg>
+                        </div>
+                      </div>
+                    `;
+                    
+                    copyButton.style.cssText = `
+                      position: relative;
+                      margin-left: 8px;
+                      cursor: pointer;
+                    `;
+                    
+
+
+                    // 添加点击事件
+                    copyButton.onclick = async () => {
+                      try {
+                        const productInfo = extractGbRawData();
+                        if (!productInfo) {
+                          throw new Error('无法获取商品信息');
+                        }
+                        
+                        const color_data = extractColorData();
+                        if (!color_data || color_data.length === 0) {
+                          throw new Error('未找到颜色数据');
+                        }
+
+                        // 处理每个颜色
+                        for (const colorItem of color_data) {
+                          await new Promise(resolve => setTimeout(resolve, 1000));
+                          
+                          try {
+                            const colorSpans = colorContainer.querySelectorAll('span.sui-popover__trigger');
+
+                            for (const span of colorSpans) {
+                              const colorDiv = span.querySelector('.goods-color__radio');
+                              const colorLabel = colorDiv?.getAttribute('aria-label');
+                              const goodsId = span.getAttribute('goods-id');
+                              
+                              // 检查是否匹配当前颜色项
+                              if (colorLabel === colorItem.color && goodsId === colorItem.goods_id.toString()) {
+                                // 构建评论请求参数
+                                const params_color = {
+                                  '_ver': '1.1.8',
+                                  '_lang': 'en',
+                                  'spu': '',
+                                  'goods_id': colorItem.goods_id,
+                                  'page': '1',
+                                  'limit': '20',
+                                  'offset': '0',
+                                  'sort': '',
+                                  'size': '',
+                                  'is_picture': '',
+                                  'comment_rank': '',
+                                  'rule_id': '',
+                                  'local_site_query_flag': '',
+                                  'local_site_abt_flag': '',
+                                  'sku': productInfo.detail.sku || '',
+                                  'tag_id': '',
+                                  'goods_spu': productInfo.detail.goods_spu || '',
+                                  'store_code': productInfo.detail.store_code || '',
+                                  'tag_rule_id': '',
+                                  'store_comment_flag': '1',
+                                  'cat_id': productInfo.detail.cat_id || '',
+                                  'isLowestPriceProductOfBuyBox': '0',
+                                  'mainProductSameGroupId': ''
+                                };
+                                
+                                const sku_color_data = await triggerReviewRequest(
+                                  1, 
+                                  [], 
+                                  'https://us.shein.com/bff-api/product/get_goods_review_detail',
+                                  params_color, 
+                                  colorItem.color
+                                );
+                                //console.log('获取到颜色评论数据:', sku_color_data);
+                                // 更新或创建数字标记
+                                let numberMark = span.querySelector('.soku-number-mark');
+                                if (!numberMark) {
+                                  numberMark = document.createElement('div');
+                                  numberMark.className = 'soku-number-mark';
+                                  numberMark.style.cssText = `
+                                    position: absolute;
+                                    bottom: 5px;
+                                    right: -1px;
+                                    background-color: red;
+                                    color: white;
+                                    border-radius: 50%;
+                                    width: 16px;
+                                    height: 16px;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-size: 10px;
+                                    z-index: 10000;
+                                    pointer-events: none;
+                                    user-select: none;
+                                  `;
+                                  
+                                  if (getComputedStyle(span).position === 'static') {
+                                    span.style.position = 'relative';
+                                  }
+                                  span.appendChild(numberMark);
+                                }
+
+                                // 更新数字标记的值
+                                console.log('sku_color_data:', sku_color_data);
+                                if (sku_color_data && sku_color_data.comment_num) {
+                                  numberMark.textContent = sku_color_data.comment_num;
+                                }
+                                
+                                break;
+                              }
+                            }
+                          } catch (error) {
+                            console.error(`评论数据失败:`, error);
+                          }
+                        }
+                        
+
+                        // 收集并复制数据
+                        const colorData = [];
+                        container.querySelectorAll('.soku-number-mark').forEach(mark => {
+                          const span = mark.closest('.sui-popover__trigger');
+                          const colorLabel = span.querySelector('.goods-color__radio')?.getAttribute('aria-label');
+                          const count = mark.textContent;
+                          if(colorLabel && count) {
+                            colorData.push(`${colorLabel}: ${count}`);
+                          }
+                        });
+                        
+                        const text = colorData.join('\n');
+                        await navigator.clipboard.writeText(text);
+                        alert('颜色数据已复制到剪贴板');
+
+                      } catch (err) {
+                        console.error('处理颜色数据时出错:', err);
+                        alert('处理颜色数据时出错');
+                      }
+                    };
+
+                    container.appendChild(copyButton);
+                    resolve(container);
+                  } else if (attempts >= maxAttempts) {
+                    console.log('达到最大尝试次数，未找到颜色容器');
+                    resolve(null);
+                  } else {
+                    console.log('未找到颜色容器，500ms后重试');
+                    setTimeout(check, 500);
+                  }
+                };
+                
+                check();
+              });
+            };
+            
+            // 等待颜色容器加载
+            const colorContainer = await waitForColorContainer();
+            
+            if (!colorContainer) {
+              console.error('无法找到颜色容器，退出处理');
+              return;
+            }
+            
+            console.log('开始处理颜色数据，颜色总数:', color_data.length);
+
+
+
+          };
+
+          // 调用处理颜色的函数
+          processAllColors().catch(error => {
+            console.error('处理颜色数据时出错:', error);
+          });
+          
+        } else {
+          console.log('未找到颜色数据', color_data);
+        }
       }, 2000); // 等待2秒后触发
-      
     } catch (error) {
       console.error('SOKU功能初始化失败:', error);
     }
   }
 })();
-
