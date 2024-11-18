@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SOKU-AI Image Uploader</title>
+  <link rel="stylesheet" href="popup.css">
+ 
+</head>
+
+<body>
+  <div class="sidebar">
+    <div class="menu-item">
+      <span class="menu-item-text">总结评论：</span>
+      <label class="switch">
+        <input type="checkbox" id="reviewToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="menu-links">
+      <a href="https://console.bce.baidu.com/ai/#/ai/imagesearch/app/tuku/manage/index~appId=5767433&apiId=115" class="menu-link" id="galleryLink" target="_blank">图库管理</a>
+      <a href="help.html" class="menu-link" id="introLink" target="_blank">功能介绍</a>
+    </div>
+    <div class="version-info">
+      <span class="version-label">版本：</span>
+      <span class="version-number">1.0.0</span>
+      <div class="version-date">更新日期：2024-11-18</div>
+      <div class="version-notes">
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <h1>图片上传</h1>
+    <div class="upload-area">
+      <input type="file" id="imageInput" accept="image/*">
+      <label for="imageInput" class="upload-button">选择图片</label>
+      <div id="imagePreview"></div>
+    </div>
+    <div class="input-group">
+      <input type="text" id="briefInput" placeholder="请输入款号" required>
+      <input type="number" id="classId1Input" placeholder="Class ID 1" class="hidden">
+      <input type="number" id="classId2Input" placeholder="Class ID 2" class="hidden">
+    </div>
+    <button id="uploadButton">上传图片</button>
+    <div id="result"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

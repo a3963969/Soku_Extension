@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "SOKU Extension",
+  "version": "3.0.0",
+  "description": "A custom extension for Alibaba with image search",
+  "permissions": [
+    "activeTab",
+     "contextMenus",
+     "cookies",
+     "storage",
+     "tabs",
+     "webNavigation",
+     "declarativeNetRequest",
+     "declarativeNetRequestFeedback", 
+     "declarativeNetRequestWithHostAccess",
+     "browsingData",
+     "webNavigation",
+     "webRequest",
+     "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "https://aip.baidubce.com/*",
+    "https://*.ltwebstatic.com/*",
+    "https://img.shein.com/*",
+    "https://www.amazon.com/*",
+    "*://*.shein.com/*",
+    "https://api.anthropic.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "web_accessible_resources": [{
+    "resources": ["imageConverter.js", "help.html"],
+    "matches": ["<all_urls>"]
+  }],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.shein.com/*",
+        "*://*.shein.com.hk/*",
+        "*://*.shein.com.vn/*",
+        "*://*.shein.co.uk/*",
+        "*://*.shein.in/*",
+        "*://*.shein.tw/*",
+        "*://*.shein.com.mx/*",
+        "*://*.amazon.com/*"
+      ],
+      "run_at": "document_end",
+      "js": [
+        "jszip.min.js",
+        "sheinContentScript.js"
+      ],
+      "type": "module"
+    },
+    {
+      "matches": ["https://www.amazon.com/*"],
+      "js": ["amazonContentScript.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
